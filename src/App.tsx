@@ -215,7 +215,7 @@ export default function App() {
 
         {/* 🛰️ Database Sync Info Banner (No print) */}
         <section id="banner-sync" className="no-print">
-          <SyncIndicator />
+          <SyncIndicator items={items} onSyncNotification={triggerNotification} />
         </section>
 
         {/* Tabs & Importers (No print) */}
