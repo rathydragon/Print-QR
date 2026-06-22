@@ -37,9 +37,18 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
   const [sheetsProgress, setSheetsProgress] = useState<string>('');
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(getSavedSpreadsheetId());
   const [showSheetsCard, setShowSheetsCard] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isInIframe, setIsInIframe] = useState(false);
 
-  // Initialize Auth state listener
+  // Initialize Auth state listener and iframe detection
   useEffect(() => {
+    // Detect iframe
+    try {
+      setIsInIframe(window.self !== window.top);
+    } catch (e) {
+      setIsInIframe(true);
+    }
+
     // Check Firebase Database connection status
     async function checkState() {
       if (isFirebaseEnabled) {
@@ -61,6 +70,7 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
       (user, token) => {
         setGoogleUser(user);
         setGoogleToken(token);
+        setAuthError(null);
         // Load existing saved sheet id if any
         setSpreadsheetId(getSavedSpreadsheetId());
       },
@@ -84,6 +94,7 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
   // Google Login flow
   const handleGoogleLogin = async () => {
     try {
+      setAuthError(null);
       setSheetsProgress('កំពុងចូលទៅកាន់គណនី Google...');
       const result = await signInWithGoogle();
       if (result) {
@@ -95,6 +106,17 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
       }
     } catch (err: any) {
       console.error('Google authorization error:', err);
+      let errorMsg = err.message || String(err);
+      
+      if (err.code === 'auth/popup-blocked') {
+        errorMsg = 'ផ្ទាំង Login ត្រូវបានកម្មវិធីរុករក (Browser) របស់អ្នកទប់ស្កាត់ (Popup Blocked)។ សូមចុចលើប៊ូតុង "Open App in New Tab" នៅផ្នែកខាងលើស្ដាំ ដើម្បីដំណើរការសមកាលកម្មជាមួយ Google Sheets!';
+      } else if (err.code === 'auth/iframe-directory-not-supported' || window.self !== window.top) {
+        errorMsg = 'កម្មវិធីរុករកមិនអនុញ្ញាតឱ្យផ្ទាំង Login បើកដំណើរការក្នុង Iframe Preview នេះឡើយ។ ដើម្បីដំណើរការសមកាលកម្មជាមួយ Google Sheets សូមចុចលើប៊ូតុង "Open App in New Tab" ផ្នែកខាងលើស្ដាំបង្អស់ជាមុនសិន!';
+      } else if (err.code === 'auth/network-request-failed') {
+        errorMsg = 'ការភ្ជាប់បណ្ដាញអ៊ីនធឺណិតមានបញ្ហា ឬការតភ្ជាប់ត្រូវបានរំខាន។';
+      }
+      
+      setAuthError(errorMsg);
       onSyncNotification('ការភ្ជាប់គណនី Google ត្រូវបានរារាំង ឬបរាជ័យ។', 'info');
       setSheetsProgress('');
     }
@@ -108,6 +130,7 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
         setGoogleUser(null);
         setGoogleToken(null);
         setSpreadsheetId(null);
+        setAuthError(null);
         onSyncNotification('បានផ្តាច់គណនី Google រួចរាល់!', 'info');
       } catch (err) {
         console.error('Logout error:', err);
@@ -121,6 +144,7 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
     try {
       setIsSheetsSyncing(true);
       setSheetsProgress('កំពុងចាប់ផ្តើមសមកាលកម្ម...');
+      setAuthError(null);
       
       const sheetId = await syncCatalogToGoogleSheet(
         items, 
@@ -132,7 +156,15 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
       onSyncNotification('បានរក្សាទុកទិន្នន័យក្នុង Google Sheet រួចរាល់ ដោយគ្មានភាពស្ទួន!');
     } catch (err: any) {
       console.error('Google Sheet synchronization mistake:', err);
-      alert(`សមកាលកម្មបរាជ័យ៖ ${err.message || err}`);
+      if (err.message === 'TOKEN_EXPIRED') {
+        setGoogleUser(null);
+        setGoogleToken(null);
+        setSpreadsheetId(null);
+        setAuthError('ការតភ្ជាប់របស់អ្នកបានហួសសុពលភាព (Session Expired)។ សូមភ្ជាប់គណនី Google សារជាថ្មី!');
+        onSyncNotification('ការតភ្ជាប់បានហួសសុពលភាព សូមភ្ជាប់គណនីឡើងវិញ', 'info');
+      } else {
+        setAuthError(`សមកាលកម្មបរាជ័យ៖ ${err.message || err}`);
+      }
     } finally {
       setIsSheetsSyncing(false);
       setSheetsProgress('');
@@ -236,6 +268,32 @@ export default function SyncIndicator({ items, onSyncNotification }: SyncIndicat
               </div>
             </div>
           </div>
+
+          {/* If there's an auth/sync error */}
+          {authError && (
+            <div className="bg-rose-50 border border-rose-200/50 text-rose-800 text-xs rounded-2xl p-4 flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 shrink-0 text-rose-500 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold">មានបញ្ហាក្នុងការភ្ជាប់ ឬរក្សាទុក៖</p>
+                <p className="font-medium text-slate-600 leading-relaxed">{authError}</p>
+              </div>
+            </div>
+          )}
+
+          {/* If inside iframe and not logged in */}
+          {isInIframe && !googleUser && (
+            <div className="bg-amber-50 border border-amber-200/50 text-amber-800 text-xs rounded-2xl p-4 flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 shrink-0 text-amber-500 mt-0.5 animate-pulse" />
+              <div className="space-y-1">
+                <p className="font-bold animate-pulse">ព័ត៌មានសំខាន់សម្រាប់ Preview Iframe៖</p>
+                <p className="font-medium text-slate-600 leading-relaxed">
+                  ដោយសារអ្នកកំពុងប្រើប្រាស់នៅក្នុងផ្ទាំង Preview (iframe) របស់ AI Studio, កម្មវិធីរុករក (Browser) អាចនឹងសន្មតថាវាជាផ្ទាំងមិនសុវត្ថិភាព ហើយទប់ស្កាត់ផ្ទាំង Sign-in (Popup Blocked)។
+                  <br />
+                  ដើម្បីភ្ជាប់គណនី Google Sheets បានដោយរលូន <strong>សូមចុចលើប៊ូតុង "Open App" ឬ "Open in new tab"</strong> នៅផ្នែកខាងលើបង្អស់ផ្នែកខាងស្ដាំ ដើម្បីបើកដំណើរការកម្មវិធីក្នុងទំព័រពេញលេញ!
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="border-t border-slate-100 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
             {/* Google Profile/Connection status */}

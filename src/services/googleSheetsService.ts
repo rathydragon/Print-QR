@@ -99,6 +99,10 @@ async function findExistingSpreadsheet(accessToken: string): Promise<string | nu
       }
     });
 
+    if (res.status === 401) {
+      throw new Error('TOKEN_EXPIRED');
+    }
+
     if (!res.ok) {
       console.warn('Google Drive search failed, status:', res.status);
       return null;
@@ -108,7 +112,8 @@ async function findExistingSpreadsheet(accessToken: string): Promise<string | nu
     if (data.files && data.files.length > 0) {
       return data.files[0].id; // Return the first found file ID
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'TOKEN_EXPIRED') throw error;
     console.error('Error finding existing spreadsheet in Drive:', error);
   }
   return null;
@@ -145,6 +150,10 @@ async function createSpreadsheet(accessToken: string): Promise<string> {
     body: JSON.stringify(body),
   });
 
+  if (res.status === 401) {
+    throw new Error('TOKEN_EXPIRED');
+  }
+
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`Failed to create spreadsheet: ${errText}`);
@@ -175,6 +184,9 @@ export async function syncCatalogToGoogleSheet(
     const verifyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${spreadsheetId}?fields=id,trashed`, {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
+    if (verifyRes.status === 401) {
+      throw new Error('TOKEN_EXPIRED');
+    }
     if (!verifyRes.ok) {
       spreadsheetId = null;
       clearSavedSpreadsheetId();
@@ -214,11 +226,15 @@ export async function syncCatalogToGoogleSheet(
     const getRes = await fetch(getUrl, {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
+    if (getRes.status === 401) {
+      throw new Error('TOKEN_EXPIRED');
+    }
     if (getRes.ok) {
       const data = await getRes.json();
       existingCells = data.values || [];
     }
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === 'TOKEN_EXPIRED') throw err;
     console.warn('Spreadsheet request error: default fallback', err);
   }
 
@@ -316,9 +332,64 @@ export async function syncCatalogToGoogleSheet(
     })
   });
 
+  if (putRes.status === 401) {
+    throw new Error('TOKEN_EXPIRED');
+  }
+
   if (!putRes.ok) {
     const errText = await putRes.text();
-    throw new Error(`Failed to update google sheet values: ${errText}`);
+    // If table tab was missing or range doesn't match, let's create the tab tab name!
+    if (errText.includes('range') || errText.includes('sheet') || errText.includes('gridProperties')) {
+      try {
+        onProgress?.('កំពុងរៀបចំប្រព័ន្ធសន្លឹកកិច្ចការ...');
+        const addSheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+        await fetch(addSheetUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: 'ផលិតផល (Products)',
+                    gridProperties: {
+                      frozenRowCount: 1,
+                    }
+                  }
+                }
+              }
+            ]
+          })
+        });
+
+        // Retry PUT with fresh sheet tab
+        const retryRes = await fetch(putUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            values: updatedRows
+          })
+        });
+
+        if (retryRes.status === 401) {
+          throw new Error('TOKEN_EXPIRED');
+        }
+        if (!retryRes.ok) {
+          throw new Error(`Failed on retry sheet update: ${await retryRes.text()}`);
+        }
+      } catch (innerErr: any) {
+        if (innerErr.message === 'TOKEN_EXPIRED') throw innerErr;
+        throw new Error(`Failed to initialize 'ផលិតផល' tab in Google Sheets: ${errText}`);
+      }
+    } else {
+      throw new Error(`Failed to update google sheet values: ${errText}`);
+    }
   }
 
   // If there are more rows down there left from previous sync that are now removed, let's clear them
