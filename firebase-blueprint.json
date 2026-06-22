@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "QRCodeItem": {
+      "title": "QRCodeItem",
+      "description": "A generated QR code item imported or manually saved by the user.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "The dynamic data value contained inside the QR code"
+        },
+        "name": {
+          "type": "string",
+          "description": "A human-readable label or product name representing the item"
+        },
+        "price": {
+          "type": "string",
+          "description": "Optional price labels displayed beneath the QR barcode"
+        },
+        "category": {
+          "type": "string",
+          "description": "Optional category string used to organize items on cards"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Iso timestamp describing creation datetime"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional comments from imported spreadsheet rows"
+        },
+        "printedCount": {
+          "type": "integer",
+          "description": "Count tracker incremented on print triggers"
+        }
+      },
+      "required": ["code", "name", "createdAt"]
+    }
+  },
+  "firestore": {
+    "qrcodes/{qrId}": {
+      "schema": "QRCodeItem",
+      "description": "A root storage bucket of generated QR labels"
+    }
+  }
+}

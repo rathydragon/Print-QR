@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    function incoming() { 
+      return request.resource.data; 
+    }
+
+    function existing() { 
+      return resource.data; 
+    }
+
+    function isValidQRCodeItem(data) {
+      return data.keys().hasAll(['code', 'name', 'createdAt'])
+        && data.code is string && data.code.size() <= 500
+        && data.name is string && data.name.size() <= 500
+        && data.createdAt is string
+        && (!('price' in data) || data.price is string || data.price is number || data.price == '')
+        && (!('category' in data) || data.category is string || data.category == '')
+        && (!('notes' in data) || data.notes is string || data.notes == '')
+        && (!('printedCount' in data) || data.printedCount is int);
+    }
+
+    match /qrcodes/{qrId} {
+      allow read: if true; 
+      allow create: if isValidId(qrId) && isValidQRCodeItem(incoming());
+      allow update: if isValidId(qrId) 
+                    && isValidQRCodeItem(incoming()) 
+                     && (incoming().diff(existing()).affectedKeys().hasOnly(['code', 'name', 'price', 'category', 'notes', 'printedCount']));
+      allow delete: if isValidId(qrId);
+    }
+  }
+}

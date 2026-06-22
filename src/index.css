@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Kantumruy+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Kantumruy Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  
+  --color-brand-50: #f4f6fa;
+  --color-brand-100: #e8ecf5;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+}
+
+/* Background gradient patterns */
+.mesh-bg {
+  background-color: #f8fafc;
+  background-image: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.05) 0, transparent 50%),
+                    radial-gradient(at 50% 0%, rgba(147, 51, 234, 0.05) 0, transparent 50%),
+                    radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.05) 0, transparent 50%);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print Layout rules */
+@media print {
+  /* Hide all typical web elements */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Force clean print containers */
+  body, html {
+    background: #ffffff !important;
+    background-image: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Target exact printable container */
+  .print-area {
+    display: block !important;
+    width: 210mm; /* A4 width */
+    margin: 0 auto !important;
+    padding: 8mm !important;
+    box-shadow: none !important;
+  }
+
+  /* Prevent page breaks on single sticker rows */
+  .print-item {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    display: inline-flex !important;
+  }
+}
